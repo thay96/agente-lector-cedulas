@@ -5,8 +5,8 @@ const { io } = require('socket.io-client');
 
 // ── Configuración ──────────────────────────────────────────
 const SERVIDOR_URL = 'http://localhost:3000';
-const PUERTO_COM   = 'COM3';
-const BAUD_RATE    = 9600;
+const PUERTO_COM = 'COM3';
+const BAUD_RATE = 9600;
 
 // ── Conexión con el servidor central (Socket.IO) ────────────
 const socket = io(SERVIDOR_URL);
@@ -39,12 +39,12 @@ port.on('data', (chunk) => {
   if (bufferAcumulado.length >= 200) {
     const raw = bufferAcumulado;
 
-    const documento        = raw.subarray(48, 58).toString('latin1').replace(/\0/g, '').trim();
-    const primerApellido   = raw.subarray(58, 81).toString('latin1').replace(/\0/g, '').trim();
-    const segundoApellido  = raw.subarray(81, 104).toString('latin1').replace(/\0/g, '').trim();
-    const nombres          = raw.subarray(104, 127).toString('latin1').replace(/\0/g, '').trim();
-    const sexo             = raw.subarray(151, 152).toString('latin1').trim();
-    const fechaNacimiento  = raw.subarray(152, 160).toString('latin1').trim();
+    const documento = raw.subarray(48, 58).toString('latin1').replace(/\0/g, '').trim();
+    const primerApellido = raw.subarray(58, 81).toString('latin1').replace(/\0/g, '').trim();
+    const segundoApellido = raw.subarray(81, 104).toString('latin1').replace(/\0/g, '').trim();
+    const nombres = raw.subarray(104, 127).toString('latin1').replace(/\0/g, '').trim();
+    const sexo = raw.subarray(151, 152).toString('latin1').trim();
+    const fechaNacimiento = raw.subarray(152, 160).toString('latin1').trim();
 
     const nombreCompleto = `${primerApellido} ${segundoApellido} ${nombres}`.replace(/\s+/g, ' ').trim();
 
@@ -57,6 +57,24 @@ port.on('data', (chunk) => {
       sexo,
       fechaNacimiento,
     };
+
+    // ── Validación: descartar lecturas corruptas antes de enviarlas ──
+    const documentoValido = /^\d{6,10}$/.test(documento);
+    const nombreValido = /^[A-ZÑ\s]{3,80}$/.test(nombreCompleto);
+
+    if (!documentoValido || !nombreValido) {
+      console.warn('\n⚠️  Lectura descartada: los datos no tienen el formato esperado.');
+      console.warn('   Documento leído:', JSON.stringify(documento));
+      console.warn('   Nombre leído:   ', JSON.stringify(nombreCompleto));
+      console.warn('   Por favor, vuelve a escanear la cédula.\n');
+
+      if (socket.connected) {
+        socket.emit('cedula-error', { mensaje: 'Lectura de cédula fallida. Por favor, vuelve a escanear.' });
+      }
+
+      bufferAcumulado = Buffer.alloc(0);
+      return; // No continuar, no enviar datos corruptos
+    }
 
     console.log('\n✅ ¡CÉDULA DECODIFICADA CON ÉXITO!');
     console.log('-----------------------------------');
